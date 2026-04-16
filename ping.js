@@ -6,9 +6,10 @@
  *
  * 功能：
  * 1. 多账号抓参
- * 2. 定时批量执行
+ * 2. 定时分批执行
  * 3. 随机延迟防风控
  * 4. 遇验证码自动停止该账号视频任务
+ * 5. 支持一键清空本地账号数据
  *********************************/
 
 const scriptName = "PingMe";
@@ -17,13 +18,14 @@ const cursorKey = "pingme_batch_cursor_universal_v1";
 
 const SECRET = "0fOiukQq7jXZV2GRi9LGlO";
 
-// ===== 防风控参数 =====
-const BATCH_SIZE = 3;          // 每次跑几个账号
-const MAX_VIDEO = 5;           // 每账号最多视频次数
-const MIN_DELAY = 8000;        // 最小延迟 8 秒
-const MAX_DELAY = 15000;       // 最大延迟 15 秒
-const STOP_ON_CAPTCHA = true;  // 遇验证码停止该账号
-const SHOW_REQUEST_LOG = false; // 是否输出请求日志
+// ===== 可调参数 =====
+const BATCH_SIZE = 1;            // 每次跑几个账号，建议 1 最稳
+const MAX_VIDEO = 5;             // 每账号最多视频次数
+const MIN_DELAY = 8000;          // 最小延迟 8 秒
+const MAX_DELAY = 15000;         // 最大延迟 15 秒
+const STOP_ON_CAPTCHA = true;    // 遇验证码停止该账号
+const SHOW_REQUEST_LOG = false;  // 是否输出请求日志
+const RESET = false;             // 改成 true 后，运行一次脚本即可清空本地账号数据
 // =====================
 
 const isQX = typeof $task !== "undefined";
@@ -563,18 +565,26 @@ function captureRequest() {
   }
 }
 
-(async () => {
-  try {
-    if (typeof $request !== "undefined") {
-      captureRequest();
-      done({});
-      return;
-    }
+// ===== 手动清空数据开关 =====
+if (RESET) {
+  writeValue(storeKey, "[]");
+  writeValue(cursorKey, "0");
+  notify("已清空账号数据", "请重新打开 PingMe 抓参");
+  $done();
+} else {
+  (async () => {
+    try {
+      if (typeof $request !== "undefined") {
+        captureRequest();
+        done({});
+        return;
+      }
 
-    await runTask();
-    done({});
-  } catch (e) {
-    notify("❌ 脚本异常", String(e));
-    done({});
-  }
-})();
+      await runTask();
+      done({});
+    } catch (e) {
+      notify("❌ 脚本异常", String(e));
+      done({});
+    }
+  })();
+}
