@@ -25,7 +25,7 @@ const MIN_DELAY = 8000;          // 最小延迟 8 秒
 const MAX_DELAY = 15000;         // 最大延迟 15 秒
 const STOP_ON_CAPTCHA = true;    // 遇验证码停止该账号
 const SHOW_REQUEST_LOG = false;  // 是否输出请求日志
-const RESET = false;             // 改成 true 后，运行一次脚本即可清空本地账号数据
+const RESET = ture;             // 改成 true 后，运行一次脚本即可清空本地账号数据
 // =====================
 
 const isQX = typeof $task !== "undefined";
