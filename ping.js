@@ -1,19 +1,40 @@
-// PingMe for Surge - Multi Account
-// 用法：
-// 1. 安装模块，开启 MITM
-// 2. 每登录/切换一个账号，打开一次 PingMe 触发 queryBalanceAndBonus
-// 3. 脚本会自动保存多个账号
-// 4. cron 运行时会依次执行所有账号
+/*********************************
+ * PingMe Universal
+ * 支持：
+ * - Surge
+ * - Quantumult X
+ *
+ * 功能：
+ * 1. 多账号抓参
+ * 2. 定时批量执行
+ * 3. 随机延迟防风控
+ * 4. 遇验证码自动停止该账号视频任务
+ *********************************/
 
 const scriptName = "PingMe";
-const storeKey = "pingme_multi_accounts_v1";
+const storeKey = "pingme_multi_accounts_universal_v1";
+const cursorKey = "pingme_batch_cursor_universal_v1";
 
 const SECRET = "0fOiukQq7jXZV2GRi9LGlO";
-const MAX_VIDEO = 5;
-const VIDEO_DELAY = 8000;
+
+// ===== 防风控参数 =====
+const BATCH_SIZE = 3;          // 每次跑几个账号
+const MAX_VIDEO = 5;           // 每账号最多视频次数
+const MIN_DELAY = 8000;        // 最小延迟 8 秒
+const MAX_DELAY = 15000;       // 最大延迟 15 秒
+const STOP_ON_CAPTCHA = true;  // 遇验证码停止该账号
+const SHOW_REQUEST_LOG = false; // 是否输出请求日志
+// =====================
+
+const isQX = typeof $task !== "undefined";
+const isSurge = typeof $httpClient !== "undefined" && typeof $loon === "undefined";
 
 function notify(subtitle, body) {
-  $notification.post(scriptName, subtitle, body);
+  if (isQX) {
+    $notify(scriptName, subtitle, body);
+  } else {
+    $notification.post(scriptName, subtitle, body);
+  }
 }
 
 function done(value = {}) {
@@ -21,6 +42,7 @@ function done(value = {}) {
 }
 
 function log(msg) {
+  if (!SHOW_REQUEST_LOG) return;
   console.log(`[${scriptName}] ${msg}`);
 }
 
@@ -28,20 +50,18 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function httpGet(options) {
-  return new Promise((resolve, reject) => {
-    $httpClient.get(options, (error, response, data) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve({
-          status: response ? response.status : 0,
-          headers: response ? response.headers : {},
-          body: data || ""
-        });
-      }
-    });
-  });
+function randomDelay() {
+  return Math.floor(Math.random() * (MAX_DELAY - MIN_DELAY + 1)) + MIN_DELAY;
+}
+
+function readValue(key) {
+  if (isQX) return $prefs.valueForKey(key);
+  return $persistentStore.read(key);
+}
+
+function writeValue(key, value) {
+  if (isQX) return $prefs.setValueForKey(value, key);
+  return $persistentStore.write(value, key);
 }
 
 function safeJsonParse(text) {
@@ -107,7 +127,7 @@ function getAccountName(capture) {
 }
 
 function readAccounts() {
-  const raw = $persistentStore.read(storeKey);
+  const raw = readValue(storeKey);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -118,7 +138,7 @@ function readAccounts() {
 }
 
 function writeAccounts(accounts) {
-  return $persistentStore.write(JSON.stringify(accounts), storeKey);
+  return writeValue(storeKey, JSON.stringify(accounts));
 }
 
 function upsertAccount(capture) {
@@ -149,6 +169,70 @@ function upsertAccount(capture) {
   };
 }
 
+function getBatchCursor() {
+  const raw = readValue(cursorKey);
+  const num = Number(raw);
+  return Number.isInteger(num) && num >= 0 ? num : 0;
+}
+
+function setBatchCursor(cursor) {
+  return writeValue(cursorKey, String(cursor));
+}
+
+function getBatchAccounts(accounts) {
+  if (!accounts.length) return { batch: [], start: 0, next: 0 };
+
+  const start = getBatchCursor() % accounts.length;
+  const batch = [];
+
+  for (let i = 0; i < Math.min(BATCH_SIZE, accounts.length); i++) {
+    batch.push(accounts[(start + i) % accounts.length]);
+  }
+
+  const next = (start + batch.length) % accounts.length;
+  setBatchCursor(next);
+
+  return { batch, start, next };
+}
+
+function isCaptchaText(text) {
+  return /验证码|captcha|verify|图形验证|请输入图形验证码/i.test(text || "");
+}
+
+function httpGet(options) {
+  return new Promise((resolve, reject) => {
+    if (isQX) {
+      $task.fetch({
+        url: options.url,
+        method: "GET",
+        headers: options.headers || {}
+      }).then(
+        resp => {
+          resolve({
+            status: resp.statusCode,
+            headers: resp.headers || {},
+            body: resp.body || ""
+          });
+        },
+        err => reject(err)
+      );
+    } else {
+      $httpClient.get(options, (error, response, data) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve({
+            status: response ? response.status : 0,
+            headers: response ? response.headers : {},
+            body: data || ""
+          });
+        }
+      });
+    }
+  });
+}
+
+// MD5
 function MD5(string) {
   function RotateLeft(lValue, iShiftBits) {
     return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits));
@@ -384,26 +468,31 @@ async function runOneAccount(item, index) {
       const res = await fetchApi("checkIn", capture, headers);
       const d = safeJsonParse(res.body);
       if (d && d.retcode === 0) {
-        msgs.push(`✅ 签到：${(d.result?.bonusHint || d.retmsg || "成功").replace(/\n/g, " ")}`);
+        const tip = (d.result?.bonusHint || d.retmsg || "成功").replace(/\n/g, " ");
+        msgs.push(`✅ 签到：${tip}`);
       } else {
-        msgs.push(`⚠️ 签到：${d ? d.retmsg : "返回解析失败"}`);
+        const tip = d ? d.retmsg : "返回解析失败";
+        msgs.push(`⚠️ 签到：${tip}`);
       }
     } catch (e) {
       msgs.push(`❌ 签到失败：${String(e)}`);
     }
 
     for (let i = 1; i <= MAX_VIDEO; i++) {
-      await sleep(i === 1 ? 1500 : VIDEO_DELAY);
+      const waitMs = i === 1 ? 1500 : randomDelay();
+      await sleep(waitMs);
+
       try {
         const res = await fetchApi("videoBonus", capture, headers);
         const d = safeJsonParse(res.body);
+
         if (d && d.retcode === 0) {
-          msgs.push(`🎬 视频${i}：+${d.result?.bonus || "?"} Coins`);
+          msgs.push(`🎬 视频${i}：+${d.result?.bonus || "?"} Coins（延迟${Math.round(waitMs / 1000)}秒）`);
         } else {
           const tip = d ? d.retmsg : "返回解析失败";
           msgs.push(`⏸ 视频${i}：${tip}`);
-          if (/验证码|captcha|verify/i.test(tip)) {
-            msgs.push(`🛑 需要人工验证，停止该账号视频任务`);
+          if (STOP_ON_CAPTCHA && isCaptchaText(tip)) {
+            msgs.push(`🛑 检测到验证码，停止该账号后续视频任务`);
           }
           break;
         }
@@ -435,14 +524,23 @@ async function runTask() {
     return;
   }
 
+  const { batch, start, next } = getBatchAccounts(accounts);
+  if (!batch.length) {
+    notify("⚠️ 无可执行账号", "请重新抓取账号参数");
+    return;
+  }
+
   const blocks = [];
-  for (let i = 0; i < accounts.length; i++) {
-    const text = await runOneAccount(accounts[i], i);
+  blocks.push(`本次批次：从第 ${start + 1} 个账号开始，共执行 ${batch.length} 个账号`);
+  blocks.push(`下次批次起点：第 ${next + 1} 个账号`);
+
+  for (let i = 0; i < batch.length; i++) {
+    const text = await runOneAccount(batch[i], start + i);
     blocks.push(text);
   }
 
   const finalText = blocks.join("\n\n");
-  notify(`全部任务完成（共 ${accounts.length} 个账号）`, finalText);
+  notify(`全部任务完成（本次 ${batch.length}/${accounts.length} 个账号）`, finalText);
 }
 
 function captureRequest() {
@@ -461,7 +559,7 @@ function captureRequest() {
     );
     log(`capture saved: ${result.name}, total=${result.count}`);
   } else {
-    notify("❌ 参数保存失败", "请检查 Surge 持久化存储");
+    notify("❌ 参数保存失败", "请检查本地持久化存储");
   }
 }
 
