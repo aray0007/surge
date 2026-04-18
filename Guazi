@@ -28,7 +28,7 @@
 ^https?:\/\/rg829\.8f3m24\.com\/v0\.1\/public\/codepush\/update_check - reject-dict
 
 [Script]
-瓜子影视_getNav = type=http-response, pattern=^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Resource\/Config\/getNav, requires-body=1, max-size=0, script-path=https://raw.githubusercontent.com/aray0007/surge/main/Guazi.js
+瓜子影视_getNav = type=http-response, pattern=^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Resource\/Config\/getNav, requires-body=1, max-size=0, script-path=https://raw.githubusercontent.com/aray0007/surge/main/Guazu.js
 
 [MITM]
 hostname = %APPEND% api.ainitpz.com, api.4hnovel.com, api.1000gxf.com, rg829.8f3m24.com
