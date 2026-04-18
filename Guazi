@@ -1,0 +1,34 @@
+#!name=瓜子影视净化
+#!desc=由 QX snippet 转 Surge 模块
+#!author=怎么肥事
+#!homepage=https://github.com/ZenmoFeiShi/Qx
+#!version=2026.04.19
+
+[URL Rewrite]
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/splashInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/noticeInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/IndexList\/homeFloatAd - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/activityInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/skitAdInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/countPopTotal - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/barsUserAdInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/ad\/config - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/vajraInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/bannerInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/bardCacheAdInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/barsIndexAdInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/barsPlayAdInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/comicAdInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/liveEventAdInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/novelAdInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/playAdInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Ad\/sportAdInfo - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/IndexPlay\/vodAdvertisement - reject-dict
+^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Resource\/CommentAd\/show - reject-dict
+^https?:\/\/rg829\.8f3m24\.com\/v0\.1\/public\/codepush\/update_check - reject-dict
+
+[Script]
+瓜子影视_getNav = type=http-response, pattern=^https?:\/\/api\.(ainitpz|4hnovel|1000gxf)\.com\/App\/Resource\/Config\/getNav, requires-body=1, max-size=0, script-path=https://raw.githubusercontent.com/ZenmoFeiShi/Qx/refs/heads/main/TilingSales_getNav.js
+
+[MITM]
+hostname = %APPEND% api.ainitpz.com, api.4hnovel.com, api.1000gxf.com, rg829.8f3m24.com
