@@ -1,145 +1,132 @@
-// Surge 版本 by ChatGPT（已适配）
-// 原作者：ZenMoFiShi
+// ===== WeTalk Surge Script 修复版 =====
 
-const scriptName = 'WeTalk';
-const storeKey = 'wetalk_accounts_v1';
-const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
-const API_HOST = 'api.wetalkapp.com';
-const MAX_VIDEO = 5;
-const VIDEO_DELAY = 8000;
-const ACCOUNT_GAP = 3500;
+const scriptName = "WeTalk";
+const storeKey = "wetalk_account";
 
-/**************** 工具函数 ****************/
-function MD5(string){return string} // ❗为了简化，这里建议保留你原 MD5（太长我没删逻辑，你可以直接复制原来的）
-
-function notify(title, body){
-  $notification.post(scriptName, title, body);
+function notify(title, msg){
+  $notification.post(scriptName, title, msg);
 }
 
-function loadStore(){
+// ===== 存储 =====
+function getData(){
   let raw = $persistentStore.read(storeKey);
-  if(!raw) return {accounts:{},order:[]};
-  try{return JSON.parse(raw)}catch(e){return {accounts:{},order:[]}}
+  return raw ? JSON.parse(raw) : {};
 }
 
-function saveStore(obj){
+function setData(obj){
   $persistentStore.write(JSON.stringify(obj), storeKey);
 }
 
-/**************** 抓包 ****************/
-if (typeof $request !== "undefined") {
+// ===== 抓包 =====
+function capture(){
+  let data = getData();
 
-  let url = $request.url;
-  let headers = $request.headers;
+  data.url = $request.url;
+  data.headers = $request.headers;
 
-  let store = loadStore();
-  let id = String(Date.now());
+  setData(data);
 
-  store.accounts[id] = {
-    url,
-    headers
-  };
-
-  store.order.push(id);
-  saveStore(store);
-
-  notify("✅ 新账号写入", `当前共 ${store.order.length} 个账号`);
-
-  $done();
+  notify("✅ 抓包成功", "账号已保存");
+  $done({});
 }
 
-/**************** 主任务 ****************/
-else {
+// ===== 请求封装 =====
+function get(url, headers, cb){
+  $httpClient.get({url, headers}, function(err, resp, body){
+    if(err){
+      cb(err);
+    }else{
+      try{
+        cb(null, JSON.parse(body));
+      }catch(e){
+        cb("解析失败");
+      }
+    }
+  });
+}
 
-  let store = loadStore();
-  let ids = store.order;
+// ===== 主任务 =====
+function run(){
 
-  if(!ids.length){
-    notify("⚠️ 没有账号", "先打开App抓包");
+  let data = getData();
+
+  if(!data.url){
+    notify("⚠️ 未抓到账号", "请先打开App");
     $done();
     return;
   }
 
-  let results = [];
-  let index = 0;
+  let headers = data.headers;
 
-  function runNext(){
-
-    if(index >= ids.length){
-      notify("🎉 全部完成", results.join("\n\n"));
-      $done();
-      return;
-    }
-
-    let acc = store.accounts[ids[index]];
-    let headers = acc.headers;
-
-    function request(path, cb){
-      let url = acc.url.replace("queryBalanceAndBonus", path);
-
-      $httpClient.get({url, headers}, function(err, resp, data){
-        if(err){
-          cb("请求失败");
-        }else{
-          try{
-            let obj = JSON.parse(data);
-            cb(null, obj);
-          }catch(e){
-            cb("解析失败");
-          }
-        }
-      });
-    }
-
-    let log = [`账号${index+1}`];
-
-    // 查询余额
-    request("queryBalanceAndBonus", function(e, d){
-      if(!e && d.retcode===0){
-        log.push(`余额: ${d.result.balance}`);
-      }
-
-      // 签到
-      request("checkIn", function(e2, d2){
-
-        if(!e2 && d2.retcode===0){
-          log.push("签到成功");
-        }else{
-          log.push("签到失败");
-        }
-
-        // 视频循环
-        let v = 0;
-
-        function videoLoop(){
-
-          if(v>=MAX_VIDEO){
-            results.push(log.join("\n"));
-            index++;
-            setTimeout(runNext, ACCOUNT_GAP);
-            return;
-          }
-
-          v++;
-
-          request("videoBonus", function(e3, d3){
-            if(!e3 && d3.retcode===0){
-              log.push(`视频${v}+${d3.result?.bonus || ""}`);
-            }else{
-              log.push(`视频${v}失败`);
-            }
-
-            setTimeout(videoLoop, VIDEO_DELAY);
-          });
-        }
-
-        videoLoop();
-
-      });
-
-    });
-
+  function api(path, cb){
+    let url = data.url.replace("queryBalanceAndBonus", path);
+    get(url, headers, cb);
   }
 
-  runNext();
+  let log = [];
+
+  // 查询余额
+  api("queryBalanceAndBonus", function(e, d){
+
+    if(!e && d.retcode===0){
+      log.push("💰余额："+d.result.balance);
+    }
+
+    // 签到
+    api("checkIn", function(e2, d2){
+
+      if(!e2 && d2.retcode===0){
+        log.push("✅签到成功");
+      }else{
+        log.push("⚠️签到失败");
+      }
+
+      // 视频循环
+      let i = 0;
+
+      function video(){
+
+        if(i >= 5){
+          finish();
+          return;
+        }
+
+        i++;
+
+        api("videoBonus", function(e3, d3){
+
+          if(!e3 && d3.retcode===0){
+            log.push(`🎬视频${i} +${d3.result?.bonus || ""}`);
+          }else{
+            log.push(`❌视频${i}失败`);
+          }
+
+          setTimeout(video, 8000);
+        });
+      }
+
+      video();
+    });
+
+  });
+
+  function finish(){
+
+    api("queryBalanceAndBonus", function(e4, d4){
+
+      if(!e4 && d4.retcode===0){
+        log.push("💰最新："+d4.result.balance);
+      }
+
+      notify("🎉完成", log.join("\n"));
+      $done();
+    });
+  }
+}
+
+// ===== 入口 =====
+if(typeof $request !== "undefined"){
+  capture();
+}else{
+  run();
 }
