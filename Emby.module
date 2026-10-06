@@ -29,6 +29,7 @@ DOMAIN-SUFFIX,ccwu.cc,DIRECT
 DOMAIN-SUFFIX,139.com,DIRECT
 DOMAIN-KEYWORD,yusen,DIRECT
 DOMAIN-SUFFIX,cmecloud.cn,DIRECT
+DOMAIN-SUFFIX,x.emby.pro,DIRECT
 
 # --- 通用元数据与字幕服务 ---
 DOMAIN-SUFFIX,emby.media,EMBY,no-resolve
